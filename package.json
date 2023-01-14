@@ -1,0 +1,19 @@
+{
+  "name": "nostr-tip",
+  "description": "nostr cln tipping plugin",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/jb55/nostr-tip"
+  },
+  "main": "index.js",
+  "scripts": {
+    "test": "tap test/*.js"
+  },
+  "dependencies": {
+    "clightningjs": "^0.2.2",
+    "nostr": "^0.2.7"
+  },
+  "devDependencies": {
+    "tap": "~0.2.5"
+  }
+}
