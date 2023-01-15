@@ -149,7 +149,7 @@ async function process_invoice_payment(privkey, params)
 
 async function make_tip_note({keypair, invoice, tipreq, ptag, etag}) {
 	const kind = 9735
-	const created_at = Math.floor(Date.now()/1000)
+	const created_at = invoice.paid_at
 	const pubkey = keypair.pubkey
 	const privkey = keypair.privkey
 	const content = tipreq.content
