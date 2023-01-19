@@ -3,6 +3,7 @@
 const {RelayPool, Relay, signId, calculateId, getPublicKey} = require('nostr')
 const Plugin = require('clightningjs')
 const plugin = new Plugin()
+const fs = require('fs').promises
 const {spawn} = require('node:child_process')
 
 const TESTING = true
@@ -39,7 +40,6 @@ function relay_send(ev, url, opts) {
 
 async function send_note(urls, {privkey, pubkey}, ev)
 {
-
 	try {
 		const tasks = urls.map(relay_send.bind(null, ev))
 		await Promise.all(tasks)
@@ -86,28 +86,27 @@ function validate_note(id, note)
 	return tag[1] === id
 }
 
-async function process_invoice_payment(privkey, params)
+async function process_invoice_payment_with_invoice(privkey, invoice)
 {
 	const pubkey = getPublicKey(privkey)
 	const keypair = {privkey, pubkey}
-	const {label} = params
-	if (!label)
-		return
-        const invoice = await get_invoice(label)
-	if (!invoice) {
-		log(`Could not find invoice ${label}`)
+	// Parse the invoice metadata
+	let desc
+	try {
+		desc = JSON.parse(invoice.description)
+	} catch {
+		//log(`Could not parse description as json`)
 		return
 	}
-	// Parse the invoice metadata
-	const desc = JSON.parse(invoice.description)
+	const label = invoice.label
 	if (!desc) {
-		log(`Could not parse metadata description as json for ${label}`)
+		//log(`Could not parse metadata description as json for ${label}`)
 		return
 	}
 	// Get the nostr note entry in the metadata
 	const nostr = desc.find(tag => tag && tag.length >= 2 && tag[0] == "application/nostr")
 	if (!nostr) {
-		log(`Could not find application/nostr note in metadata for ${label}`)
+		//log(`Could not find application/nostr note in metadata for ${label}`)
 		return
 	}
 	// Get the nostr tip request note from the bolt11 metadata
@@ -142,9 +141,22 @@ async function process_invoice_payment(privkey, params)
 	const etag = etags.length > 0 && etags[0]
 	const data = {ptag, tipreq, invoice, keypair, ptag, etag}
 	const tip_note = await make_tip_note(data)
-	//await send_note(relays, keypair, tip_note)
+	await send_note(relays, keypair, tip_note)
 
-	log(JSON.stringify(tip_note))
+	log(`Sent lightning tip note ${tip_note.id} to ${relays.join(", ")}`)
+}
+
+async function process_invoice_payment(privkey, params)
+{
+	const {label} = params
+	if (!label)
+		return
+        const invoice = await get_invoice(label)
+	if (!invoice) {
+		log(`Could not find invoice ${label}`)
+		return
+	}
+	return await process_invoice_payment_with_invoice(privkey, invoice)
 }
 
 async function make_tip_note({keypair, invoice, tipreq, ptag, etag}) {
@@ -205,19 +217,45 @@ async function clirpc(rpc, args) {
 	return JSON.parse(res)
 }
 
-async function dotest() {
+async function waitanyinvoice(index) {
+	const res = await clirpc("waitanyinvoice", index)
+	return res
+}
+
+async function dotest(args) {
 	const privkey = process.env.NOSTR_KEY
 	if (!privkey) {
 		console.log("set NOSTR_KEY")
 		return
 	}
-	const res = await process_invoice_payment(privkey, {
-		label: '12b15e85-f14d-46c8-9704-15f407c693b8'
-	})
+	let lastpay_index = parseInt(args[0]) || await read_lastpay_index()
+	while (true) {
+		const params = {lastpay_index}
+		const invoice = await waitanyinvoice(params)
+		await process_invoice_payment_with_invoice(privkey, invoice)
+		lastpay_index += 1
+		await write_lastpay_index(lastpay_index)
+	}
+}
+
+const lastpay_file = "tip_lastpay_index"
+
+async function read_lastpay_index() {
+	try {
+		const res = await fs.readFile(lastpay_file, 'utf8')
+		return parseInt(res)
+	} catch {
+		return 0
+	}
+}
+
+async function write_lastpay_index(lastpay_index) {
+	await fs.writeFile(lastpay_file, lastpay_index.toString())
 }
 
 if (TESTING) {
-	dotest()
+
+	dotest(process.argv.slice(2))
 } else {
 	plugin.addOption('nostr-key', 'hexstr of a 32byte key', 'nostr secret key', 'string')
 	plugin.start()
