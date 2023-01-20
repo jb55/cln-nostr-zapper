@@ -59,7 +59,7 @@ function get_tipreq(desc) {
 	return null
 }
 
-async function process_invoice_payment_with_invoice(privkey, invoice)
+async function process_invoice_payment(privkey, invoice)
 {
 	const pubkey = getPublicKey(privkey)
 	const keypair = {privkey, pubkey}
@@ -181,7 +181,7 @@ async function run_zapper(args) {
 	while (true) {
 		const params = {lastpay_index}
 		const invoice = await waitanyinvoice(params)
-		await process_invoice_payment_with_invoice(privkey, invoice)
+		await process_invoice_payment(privkey, invoice)
 		lastpay_index += 1
 		await write_lastpay_index(lastpay_index)
 	}
