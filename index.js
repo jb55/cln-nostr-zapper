@@ -42,7 +42,7 @@ async function send_note(urls, {privkey, pubkey}, ev)
 	}
 }
 
-function get_tipreq(desc) {
+function get_zapreq(desc) {
 	if (!desc)
 		return null
 
@@ -77,31 +77,31 @@ async function process_invoice_payment(privkey, invoice)
 		return
 	}
 	// Get the nostr note entry in the metadata
-	const tipreq = get_tipreq(desc)
-	if (!tipreq) {
+	const zapreq = get_zapreq(desc)
+	if (!zapreq) {
 		//log(`Could not find application/nostr note in metadata for ${label}`)
 		return
 	}
 
 	// Make sure there are tags on the note
-	if (!tipreq.tags || tipreq.tags.length === 0) {
+	if (!zapreq.tags || zapreq.tags.length === 0) {
 		console.log(`No tags found in ${label}`)
 		return
 	}
 	// Make sure we only have one p tag
-	const ptags = tipreq.tags.filter(t => t && t.length && t.length >= 2 && t[0] === "p")
+	const ptags = zapreq.tags.filter(t => t && t.length && t.length >= 2 && t[0] === "p")
 	if (ptags.length !== 1) {
 		console.log(`None or multiple p tags found in ${label}`)
 		return
 	}
-	// Make sure we have 0 or 1 etag (for note tipping)
-	const etags = tipreq.tags.filter(t => t && t.length && t.length >= 2 && t[0] === "e")
+	// Make sure we have 0 or 1 etag (for note zapping)
+	const etags = zapreq.tags.filter(t => t && t.length && t.length >= 2 && t[0] === "e")
 	if (!(etags.length === 0 || etags.length === 1)) {
 		console.log(`Expected none or 1 e tags in ${label}`)
 		return
 	}
 	// Look for the relays tag, we will broadcast to these relays
-	const relays_tag = tipreq.tags.find(t => t && t.length && t.length >= 2 && t[0] === "relays")
+	const relays_tag = zapreq.tags.find(t => t && t.length && t.length >= 2 && t[0] === "relays")
 	if (!relays_tag) {
 		console.log(`No relays tag found in ${label}`)
 		return
@@ -110,19 +110,19 @@ async function process_invoice_payment(privkey, invoice)
 	const relays = relays_tag.slice(1)
 	const ptag = ptags[0]
 	const etag = etags.length > 0 && etags[0]
-	const data = {ptag, tipreq, invoice, keypair, ptag, etag}
-	const tip_note = await make_tip_note(data)
-	await send_note(relays, keypair, tip_note)
+	const data = {ptag, zapreq, invoice, keypair, ptag, etag}
+	const zap_note = await make_zap_note(data)
+	await send_note(relays, keypair, zap_note)
 
-	console.log(`Sent lightning tip note ${tip_note.id} to ${relays.join(", ")}`)
+	console.log(`Sent lightning zap note ${zap_note.id} to ${relays.join(", ")}`)
 }
 
-async function make_tip_note({keypair, invoice, tipreq, ptag, etag}) {
+async function make_zap_note({keypair, invoice, zapreq, ptag, etag}) {
 	const kind = 9735
 	const created_at = invoice.paid_at
 	const pubkey = keypair.pubkey
 	const privkey = keypair.privkey
-	const content = tipreq.content
+	const content = zapreq.content
 
 	let tags = [ ptag ]
 	if (etag)
