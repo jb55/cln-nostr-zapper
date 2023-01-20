@@ -1,15 +1,8 @@
 #!/usr/bin/env node
 
 const {RelayPool, Relay, signId, calculateId, getPublicKey} = require('nostr')
-const Plugin = require('clightningjs')
-const plugin = new Plugin()
 const fs = require('fs').promises
 const {spawn} = require('node:child_process')
-
-const TESTING = true
-let log = TESTING ? console.log : log_error_file
-let callrpc = TESTING ? clirpc : plugin.rpc.call
-
 
 function relay_send(ev, url, opts) {
 	const timeout = (opts && opts.timeout != null && opts.timeout) || 5000
@@ -45,45 +38,25 @@ async function send_note(urls, {privkey, pubkey}, ev)
 		await Promise.all(tasks)
 	} catch (e) {
 		//log?
-		log(e)
+		console.log(e)
 	}
 }
 
-function decode(bolt11) {
-	return plugin.rpc.call("decode", {string:bolt11})
-}
+function get_tipreq(desc) {
+	if (!desc)
+		return null
 
-async function plugin_init(params) {
-	const privkey = params.options['nostr-key']
+	if (desc.kind === 9734)
+		return desc
 
-	broadcast = async (params) => {
-		const evName = Object.keys(params)[0]
-		if (evName !== 'invoice_payment')
-			return
+	// TODO: handle private zaps
 
-		try {
-			await process_invoice_payment(privkey, params)
-		} catch (e) {
-			return log(e)
-		}
-	  }
-}
+	// This is a deprecated old form, you don't need this
+	const found = desc.find(tag => tag && tag.length >= 2 && tag[0] == "application/nostr")
+	if (found && found[1])
+		return found[1]
 
-function validate_note(id, note)
-{
-	const tags = note.tags
-	if (note.kind !== 9734)
-		return false
-	if (!tags)
-		return false
-	if (tags.length === 0)
-		return false
-	// Ensure that we at least have a p tag
-	if (!tags.find(t => t && t.length >= 2 && t[0] === "p"))
-		return false
-	if (tag.length < 2)
-		return false
-	return tag[1] === id
+	return null
 }
 
 async function process_invoice_payment_with_invoice(privkey, invoice)
@@ -104,35 +77,33 @@ async function process_invoice_payment_with_invoice(privkey, invoice)
 		return
 	}
 	// Get the nostr note entry in the metadata
-	const nostr = desc.find(tag => tag && tag.length >= 2 && tag[0] == "application/nostr")
-	if (!nostr) {
+	const tipreq = get_tipreq(desc)
+	if (!tipreq) {
 		//log(`Could not find application/nostr note in metadata for ${label}`)
 		return
 	}
-	// Get the nostr tip request note from the bolt11 metadata
-	let tipreq = nostr[1]
 
 	// Make sure there are tags on the note
 	if (!tipreq.tags || tipreq.tags.length === 0) {
-		log(`No tags found in ${label}`)
+		console.log(`No tags found in ${label}`)
 		return
 	}
 	// Make sure we only have one p tag
 	const ptags = tipreq.tags.filter(t => t && t.length && t.length >= 2 && t[0] === "p")
 	if (ptags.length !== 1) {
-		log(`None or multiple p tags found in ${label}`)
+		console.log(`None or multiple p tags found in ${label}`)
 		return
 	}
 	// Make sure we have 0 or 1 etag (for note tipping)
 	const etags = tipreq.tags.filter(t => t && t.length && t.length >= 2 && t[0] === "e")
 	if (!(etags.length === 0 || etags.length === 1)) {
-		log(`Expected none or 1 e tags in ${label}`)
+		console.log(`Expected none or 1 e tags in ${label}`)
 		return
 	}
 	// Look for the relays tag, we will broadcast to these relays
 	const relays_tag = tipreq.tags.find(t => t && t.length && t.length >= 2 && t[0] === "relays")
 	if (!relays_tag) {
-		log(`No relays tag found in ${label}`)
+		console.log(`No relays tag found in ${label}`)
 		return
 	}
 
@@ -143,20 +114,7 @@ async function process_invoice_payment_with_invoice(privkey, invoice)
 	const tip_note = await make_tip_note(data)
 	await send_note(relays, keypair, tip_note)
 
-	log(`Sent lightning tip note ${tip_note.id} to ${relays.join(", ")}`)
-}
-
-async function process_invoice_payment(privkey, params)
-{
-	const {label} = params
-	if (!label)
-		return
-        const invoice = await get_invoice(label)
-	if (!invoice) {
-		log(`Could not find invoice ${label}`)
-		return
-	}
-	return await process_invoice_payment_with_invoice(privkey, invoice)
+	console.log(`Sent lightning tip note ${tip_note.id} to ${relays.join(", ")}`)
 }
 
 async function make_tip_note({keypair, invoice, tipreq, ptag, etag}) {
@@ -182,15 +140,6 @@ async function make_tip_note({keypair, invoice, tipreq, ptag, etag}) {
 	return ev
 }
 
-function log_error_file(e)
-{
-	fs.appendFile('log.txt', e.toString() + '\n', (err) => {
-		if (err) throw err;
-	});
-}
-
-plugin.onInit = plugin_init
-
 async function get_invoice(label)
 {
 	const {invoices} = await callrpc("listinvoices", {label})
@@ -211,18 +160,18 @@ function dospawn(cmd, ...args)
 }
 
 
-async function clirpc(rpc, args) {
+async function callrpc(rpc, args) {
 	const params = Object.keys(args).map(key => `${key}=${args[key]}`)
 	const res = await dospawn("lightning-cli", rpc, params)
 	return JSON.parse(res)
 }
 
 async function waitanyinvoice(index) {
-	const res = await clirpc("waitanyinvoice", index)
+	const res = await callrpc("waitanyinvoice", index)
 	return res
 }
 
-async function dotest(args) {
+async function run_zapper(args) {
 	const privkey = process.env.NOSTR_KEY
 	if (!privkey) {
 		console.log("set NOSTR_KEY")
@@ -253,10 +202,5 @@ async function write_lastpay_index(lastpay_index) {
 	await fs.writeFile(lastpay_file, lastpay_index.toString())
 }
 
-if (TESTING) {
 
-	dotest(process.argv.slice(2))
-} else {
-	plugin.addOption('nostr-key', 'hexstr of a 32byte key', 'nostr secret key', 'string')
-	plugin.start()
-}
+run_zapper(process.argv.slice(2))
