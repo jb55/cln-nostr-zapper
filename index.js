@@ -5,7 +5,7 @@ const fs = require('fs').promises
 const {spawn} = require('node:child_process')
 
 function relay_send(ev, url, opts) {
-	const timeout = (opts && opts.timeout != null && opts.timeout) || 5000
+	const timeout = (opts && opts.timeout != null && opts.timeout) || 1000
 
 	return new Promise((resolve, reject) => {
 		const relay = Relay(url)
@@ -79,7 +79,7 @@ async function process_invoice_payment(privkey, invoice)
 	// Get the nostr note entry in the metadata
 	const zapreq = get_zapreq(desc)
 	if (!zapreq) {
-		//log(`Could not find application/nostr note in metadata for ${label}`)
+		console.log(`Could not find zap request note in metadata for ${label}`)
 		return
 	}
 
@@ -112,9 +112,9 @@ async function process_invoice_payment(privkey, invoice)
 	const etag = etags.length > 0 && etags[0]
 	const data = {ptag, zapreq, invoice, keypair, ptag, etag}
 	const zap_note = await make_zap_note(data)
+	console.log(`Sending lightning zap note ${zap_note.id} to ${relays.join(", ")}`)
 	await send_note(relays, keypair, zap_note)
-
-	console.log(`Sent lightning zap note ${zap_note.id} to ${relays.join(", ")}`)
+	console.log(`done`)
 }
 
 async function make_zap_note({keypair, invoice, zapreq, ptag, etag}) {
@@ -180,8 +180,18 @@ async function run_zapper(args) {
 	let lastpay_index = parseInt(args[0]) || await read_lastpay_index()
 	while (true) {
 		const params = {lastpay_index}
-		const invoice = await waitanyinvoice(params)
-		await process_invoice_payment(privkey, invoice)
+		console.log("waitanyinvoice %o", params)
+		try {
+			const invoice = await waitanyinvoice(params)
+			if (!invoice || invoice === "" || !invoice.description)
+				process.exit(5)
+			console.log("done waitanyinvoice", params)
+			await process_invoice_payment(privkey, invoice)
+		} catch(e) {
+			console.log("process threw an error", e)
+			process.exit(1)
+		}
+		console.log("done processing")
 		lastpay_index += 1
 		await write_lastpay_index(lastpay_index)
 	}
