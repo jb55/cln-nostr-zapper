@@ -110,7 +110,7 @@ async function process_invoice_payment(privkey, invoice)
 	const relays = relays_tag.slice(1)
 	const ptag = ptags[0]
 	const etag = etags.length > 0 && etags[0]
-	const data = {ptag, zapreq, invoice, keypair, ptag, etag}
+	const data = {zapreq, invoice, keypair, ptag, etag}
 	const zap_note = await make_zap_note(data)
 	console.log(`Sending lightning zap note ${zap_note.id} to ${relays.join(", ")}`)
 	await send_note(relays, keypair, zap_note)
