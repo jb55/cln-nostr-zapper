@@ -183,8 +183,10 @@ async function run_zapper(args) {
 		console.log("waitanyinvoice %o", params)
 		try {
 			const invoice = await waitanyinvoice(params)
-			if (!invoice || invoice === "" || !invoice.description)
+			if (!invoice || invoice === "") {
+				console.log("invoice fail", invoice)
 				process.exit(5)
+			}
 			console.log("done waitanyinvoice", params)
 			await process_invoice_payment(privkey, invoice)
 		} catch(e) {
