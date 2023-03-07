@@ -107,7 +107,7 @@ async function process_invoice_payment(privkey, invoice)
 		return
 	}
 
-	const relays = relays_tag.slice(1)
+	const relays = relays_tag.slice(1).filter(r => r && r.startsWith("ws"))
 	const ptag = ptags[0]
 	const etag = etags.length > 0 && etags[0]
 	const data = {ptag, zapreq, invoice, keypair, ptag, etag}
