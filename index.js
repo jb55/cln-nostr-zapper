@@ -154,7 +154,10 @@ function dospawn(cmd, ...args)
 			resolve(data.toString("utf8").trim())
 		})
 		proc.on('close', code => {
-			resolve(code)
+			if (code !== 0)
+				reject(code)
+			else
+				resolve(code)
 		});
 	})
 }
