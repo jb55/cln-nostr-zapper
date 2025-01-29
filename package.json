@@ -10,7 +10,8 @@
     "test": "tap test/*.js"
   },
   "dependencies": {
-    "nostr": "^0.2.7"
+    "nostr": "^0.2.7",
+    "ws": "^8.12.1"
   },
   "devDependencies": {
     "tap": "~0.2.5"

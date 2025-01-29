@@ -107,7 +107,7 @@ async function process_invoice_payment(privkey, invoice)
 		return
 	}
 
-	const relays = relays_tag.slice(1).filter(r => r && r.startsWith("ws"))
+	const relays = relays_tag.slice(1).filter(r => r && r.startsWith && r.startsWith("ws"))
 	const ptag = ptags[0]
 	const etag = etags.length > 0 && etags[0]
 	const data = {zapreq, invoice, keypair, ptag, etag}
@@ -128,6 +128,7 @@ async function make_zap_note({keypair, invoice, zapreq, ptag, etag}) {
 	if (etag)
 		tags.push(etag)
 
+	tags.push(["P", zapreq.pubkey])
 	tags.push(["bolt11", invoice.bolt11])
 	tags.push(["description", invoice.description])
 	tags.push(["preimage", invoice.payment_preimage])
@@ -196,7 +197,7 @@ async function run_zapper(args) {
 			console.log("process threw an error", e)
 			process.exit(1)
 		}
-		console.log("done processing")
+		console.log("%s done processing", format_date(new Date()))
 		lastpay_index += 1
 		await write_lastpay_index(lastpay_index)
 	}
@@ -217,5 +218,15 @@ async function write_lastpay_index(lastpay_index) {
 	await fs.writeFile(lastpay_file, lastpay_index.toString())
 }
 
+function format_date(date) {
+	const year = date.getFullYear();
+	const month = (date.getMonth() + 1).toString().padStart(2, '0');
+	const day = date.getDate().toString().padStart(2, '0');
+	const hours = date.getHours().toString().padStart(2, '0');
+	const minutes = date.getMinutes().toString().padStart(2, '0');
+	return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
 
 run_zapper(process.argv.slice(2))
+
+
